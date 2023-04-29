@@ -415,6 +415,11 @@ static char *(features[]) =
 #else
 	"-netbeans_intg",
 #endif
+#ifdef FEAT_NO_OPEN_DIR
+	"+no_open_dir",
+#else
+	"-no_open_dir",
+#endif
 	"+num64",
 #ifdef FEAT_GUI_MSWIN
 # ifdef FEAT_OLE

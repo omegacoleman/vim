@@ -69,6 +69,8 @@ static char *(main_errors[]) =
 #define ME_EXTRA_CMD		4
     N_("Invalid argument for"),
 #define ME_INVALID_ARG		5
+    N_("is a directory"),
+#define ME_IS_DIR		6
 };
 
 #ifndef PROTO		// don't want a prototype for main()
@@ -2680,6 +2682,14 @@ scripterror:
 #ifdef USE_FNAME_CASE
 	    // Make the case of the file name match the actual file.
 	    fname_case(p, 0);
+#endif
+
+#ifdef FEAT_NO_OPEN_DIR
+	    if (mch_isdir(p))
+	    {
+		mainerr(ME_IS_DIR, p);
+		mch_exit(2);
+	    }
 #endif
 
 	    alist_add(&global_alist, p,

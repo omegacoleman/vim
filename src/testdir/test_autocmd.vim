@@ -1031,15 +1031,17 @@ func Test_BufEnter()
   bwipe!
   call assert_equal('++', g:val)
 
-  " Also get BufEnter when editing a directory
-  call mkdir('Xbufenterdir', 'D')
-  split Xbufenterdir
-  call assert_equal('+++', g:val)
+  if !has("no_open_dir")
+    " Also get BufEnter when editing a directory
+    call mkdir('Xbufenterdir', 'D')
+    split Xbufenterdir
+    call assert_equal('+++', g:val)
 
-  " On MS-Windows we can't edit the directory, make sure we wipe the right
-  " buffer.
-  bwipe! Xbufenterdir
-  au! BufEnter
+    " On MS-Windows we can't edit the directory, make sure we wipe the right
+    " buffer.
+    bwipe! Xbufenterdir
+    au! BufEnter
+  endif
 
   " Editing a "nofile" buffer doesn't read the file but does trigger BufEnter
   " for historic reasons.  Also test other 'buftype' values.
@@ -3163,12 +3165,12 @@ func Test_throw_in_BufWritePre()
 endfunc
 
 func Test_autocmd_in_try_block()
-  call mkdir('Xintrydir', 'R')
+  w Xintryfile
   au BufEnter * let g:fname = expand('%')
   try
-    edit Xintrydir/
+    edit Xintryfile
   endtry
-  call assert_match('Xintrydir', g:fname)
+  call assert_match('Xintryfile', g:fname)
 
   unlet g:fname
   au! BufEnter

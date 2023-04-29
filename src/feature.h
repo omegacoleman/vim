@@ -1183,3 +1183,9 @@
 #if defined(FEAT_NORMAL) && defined(HAVE_XATTR) && !defined(MACOS_X)
 # define FEAT_XATTR
 #endif
+
+/*
+ * +no_open_dir: stop vim command line from opening dirs
+ */
+// # define FEAT_NO_OPEN_DIR
+

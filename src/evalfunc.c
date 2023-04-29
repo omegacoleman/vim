@@ -7096,6 +7096,13 @@ f_has(typval_T *argvars, typval_T *rettv)
 		0
 #endif
 		},
+	{"no_open_dir",
+#ifdef FEAT_NO_OPEN_DIR
+		1
+#else
+		0
+#endif
+		},
 	{NULL, 0}
     };
 

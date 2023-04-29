@@ -1738,6 +1738,7 @@ endfunc
 
 " Test for editing a directory
 func Test_edit_is_a_directory()
+  CheckNotFeature no_open_dir
   CheckEnglish
   let dirname = getcwd() . "/Xeditdir"
   call mkdir(dirname, 'p')
@@ -2005,6 +2006,7 @@ func Test_edit_lastline_scroll()
 endfunc
 
 func Test_edit_browse()
+  CheckNotFeature no_open_dir
   " in the GUI this opens a file picker, we only test the terminal behavior
   CheckNotGui
 

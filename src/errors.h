@@ -41,7 +41,7 @@ EXTERN char e_invalid_expression_str[]
 EXTERN char e_invalid_range[]
 	INIT(= N_("E16: Invalid range"));
 #if defined(UNIX) || defined(FEAT_SYN_HL) \
-	    || defined(FEAT_SPELL) || defined(FEAT_EVAL)
+	    || defined(FEAT_SPELL) || defined(FEAT_EVAL) || defined(FEAT_NO_OPEN_DIR)
 EXTERN char e_str_is_directory[]
 	INIT(= N_("E17: \"%s\" is a directory"));
 #endif

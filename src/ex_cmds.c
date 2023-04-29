@@ -2608,6 +2608,14 @@ do_ecmd(
 	    fname_case(sfname, 0);   // set correct case for sfname
 #endif
 
+#ifdef FEAT_NO_OPEN_DIR
+	if ((ffname != NULL) && mch_isdir(ffname))
+	{
+	    semsg(_(e_str_is_directory), ffname);
+	    goto theend;
+	}
+#endif
+
 	if ((flags & (ECMD_ADDBUF | ECMD_ALTBUF))
 					 && (ffname == NULL || *ffname == NUL))
 	    goto theend;
