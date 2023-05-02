@@ -1189,3 +1189,5 @@
  */
 # define FEAT_NO_OPEN_DIR
 
+# define FEAT_FIFO_CHANNEL
+

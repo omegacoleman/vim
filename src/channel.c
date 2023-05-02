@@ -56,6 +56,7 @@ typedef struct sockaddr_un {
 # define sock_write(sd, buf, len) write(sd, buf, len)
 # define sock_read(sd, buf, len) read(sd, buf, len)
 # define sock_close(sd) close(sd)
+# define fd_open(pathname, flags, mode) open(pathname, flags, mode)
 # define fd_read(fd, buf, len) read(fd, buf, len)
 # define fd_write(sd, buf, len) write(sd, buf, len)
 # define fd_close(sd) close(sd)
@@ -239,6 +240,7 @@ has_any_channel(void)
 channel_still_useful(channel_T *channel)
 {
     int has_sock_msg;
+    int has_fifo_msg = 0;
     int	has_out_msg;
     int	has_err_msg;
 
@@ -259,6 +261,11 @@ channel_still_useful(channel_T *channel)
     has_sock_msg = channel->ch_part[PART_SOCK].ch_fd != INVALID_FD
 		|| channel->ch_part[PART_SOCK].ch_head.rq_next != NULL
 		|| channel->ch_part[PART_SOCK].ch_json_head.jq_next != NULL;
+#ifdef FEAT_FIFO_CHANNEL
+    has_fifo_msg = channel->ch_part[PART_FIFO_OUT].ch_fd != INVALID_FD
+		|| channel->ch_part[PART_FIFO_OUT].ch_head.rq_next != NULL
+		|| channel->ch_part[PART_FIFO_OUT].ch_json_head.jq_next != NULL;
+#endif
     has_out_msg = channel->ch_part[PART_OUT].ch_fd != INVALID_FD
 		  || channel->ch_part[PART_OUT].ch_head.rq_next != NULL
 		  || channel->ch_part[PART_OUT].ch_json_head.jq_next != NULL;
@@ -266,7 +273,7 @@ channel_still_useful(channel_T *channel)
 		  || channel->ch_part[PART_ERR].ch_head.rq_next != NULL
 		  || channel->ch_part[PART_ERR].ch_json_head.jq_next != NULL;
     return (channel->ch_callback.cb_name != NULL && (has_sock_msg
-		|| has_out_msg || has_err_msg))
+		|| has_fifo_msg || has_out_msg || has_err_msg))
 	    || ((channel->ch_part[PART_OUT].ch_callback.cb_name != NULL
 		       || channel->ch_part[PART_OUT].ch_bufref.br_buf != NULL)
 		    && has_out_msg)
@@ -535,6 +542,10 @@ channel_gui_register(channel_T *channel)
 {
     if (channel->CH_SOCK_FD != INVALID_FD)
 	channel_gui_register_one(channel, PART_SOCK);
+#ifdef FEAT_FIFO_CHANNEL
+    if (channel->CH_FIFO_OUT_FD != INVALID_FD)
+	channel_gui_register_one(channel, PART_FIFO_OUT);
+#endif
     if (channel->CH_OUT_FD != INVALID_FD
 	    && channel->CH_OUT_FD != channel->CH_SOCK_FD)
 	channel_gui_register_one(channel, PART_OUT);
@@ -815,6 +826,70 @@ channel_connect(
     return sd;
 }
 
+#ifdef FEAT_FIFO_CHANNEL
+/*
+ * Open a socket channel to the UNIX socket at "path".
+ * Returns the channel for success.
+ * Returns NULL for failure.
+ */
+    static channel_T *
+channel_open_fifo(
+	const char *path,
+	void (*nb_close_cb)(void))
+{
+    channel_T		*channel = NULL;
+    int			fd = -1;
+
+    if (*path == NUL)
+    {
+	semsg(_(e_invalid_argument_str), path);
+	return NULL;
+    }
+
+    channel = add_channel();
+    if (channel == NULL)
+    {
+	ch_error(NULL, "Cannot allocate channel.");
+	return NULL;
+    }
+
+    ch_log(channel, "Trying to read from fifo %s", path);
+    fd = fd_open(path, O_RDWR | O_NONBLOCK, 0700);
+
+    if (fd < 0 && errno == ENOENT)
+    {
+	ch_log(channel, "Fifo %s not exist, attempting to create with mkfifo(3)", path);
+	if (mkfifo(path, 0700) != 0)
+	{
+	    channel_free(channel);
+	    return NULL;
+        }
+	fd = fd_open(path, O_RDWR | O_NONBLOCK, 0700);
+    }
+
+    if (fd < 0)
+    {
+	channel_free(channel);
+	return NULL;
+    }
+
+    ch_log(channel, "Fifo file desc opened");
+
+    channel->CH_FIFO_OUT_FD = fd;
+    channel->ch_nb_close_cb = nb_close_cb;
+    channel->ch_hostname = (char *)vim_strsave((char_u *)path);
+    channel->ch_port = 0;
+    channel->ch_sock = CH_S_FIFO;
+    channel->ch_to_be_closed |= (1U << PART_FIFO_OUT);
+
+#ifdef FEAT_GUI
+    channel_gui_register_one(channel, PART_FIFO_OUT);
+#endif
+
+    return channel;
+}
+#endif
+
 /*
  * Open a socket channel to the UNIX socket at "path".
  * Returns the channel for success.
@@ -867,6 +942,7 @@ channel_open_unix(
     channel->ch_nb_close_cb = nb_close_cb;
     channel->ch_hostname = (char *)vim_strsave((char_u *)path);
     channel->ch_port = 0;
+    channel->ch_sock = CH_S_UNIX;
     channel->ch_to_be_closed |= (1U << PART_SOCK);
 
 #ifdef FEAT_GUI
@@ -1033,6 +1109,7 @@ channel_open(
     channel->ch_nb_close_cb = nb_close_cb;
     channel->ch_hostname = (char *)vim_strsave((char_u *)hostname);
     channel->ch_port = port;
+    channel->ch_sock = CH_S_SOCK;
     channel->ch_to_be_closed |= (1U << PART_SOCK);
 
 #ifdef FEAT_GUI
@@ -1258,6 +1335,7 @@ channel_open_func(typval_T *argvars)
     int		port = 0;
     int		is_ipv6 = FALSE;
     int		is_unix = FALSE;
+    int		is_fifo = FALSE;
     jobopt_T    opt;
     channel_T	*channel = NULL;
 
@@ -1282,6 +1360,13 @@ channel_open_func(typval_T *argvars)
 	is_unix = TRUE;
 	address += 5;
     }
+#ifdef FEAT_FIFO_CHANNEL
+    else if (!STRNCMP(address, "fifo:", 5))
+    {
+	is_fifo = TRUE;
+	address += 5;
+    }
+#endif
     else if (*address == '[')
     {
 	// ipv6 address
@@ -1304,7 +1389,7 @@ channel_open_func(typval_T *argvars)
 	}
     }
 
-    if (!is_unix)
+    if (!is_unix && !is_fifo)
     {
 	port = strtol((char *)(p + 1), &rest, 10);
 	if (port <= 0 || port >= 65536 || *rest != NUL)
@@ -1328,7 +1413,7 @@ channel_open_func(typval_T *argvars)
     opt.jo_timeout = 2000;
     if (get_job_options(&argvars[1], &opt,
 	    JO_MODE_ALL + JO_CB_ALL + JO_TIMEOUT_ALL
-		+ (is_unix? 0 : JO_WAITTIME), 0) == FAIL)
+		+ ((is_unix || is_fifo)? 0 : JO_WAITTIME), 0) == FAIL)
 	goto theend;
     if (opt.jo_timeout < 0)
     {
@@ -1338,6 +1423,10 @@ channel_open_func(typval_T *argvars)
 
     if (is_unix)
 	channel = channel_open_unix((char *)address, NULL);
+#ifdef FEAT_FIFO_CHANNEL
+    else if (is_fifo)
+	channel = channel_open_fifo((char *)address, NULL);
+#endif
     else
 	channel = channel_open((char *)address, port, opt.jo_waittime, NULL);
     if (channel != NULL)
@@ -1360,6 +1449,10 @@ ch_close_part(channel_T *channel, ch_part_T part)
 
     if (part == PART_SOCK)
 	sock_close(*fd);
+#ifdef FEAT_FIFO_CHANNEL
+    else if (part == PART_FIFO_OUT)
+	fd_close(*fd);
+#endif
     else
     {
 	// When using a pty the same FD is set on multiple parts, only
@@ -3152,6 +3245,9 @@ channel_can_write_to(channel_T *channel)
 channel_is_open(channel_T *channel)
 {
     return channel != NULL && (channel->CH_SOCK_FD != INVALID_FD
+#ifdef FEAT_FIFO_CHANNEL
+			  || channel->CH_FIFO_OUT_FD != INVALID_FD
+#endif
 			  || channel->CH_IN_FD != INVALID_FD
 			  || channel->CH_OUT_FD != INVALID_FD
 			  || channel->CH_ERR_FD != INVALID_FD);
@@ -3266,6 +3362,10 @@ channel_part_info(channel_T *channel, dict_T *dict, char *name, ch_part_T part)
     STRCPY(namebuf + tail, "io");
     if (part == PART_SOCK)
 	s = "socket";
+#ifdef FEAT_FIFO_CHANNEL
+    else if (part == PART_FIFO_OUT)
+	s = "fifo";
+#endif
     else switch (chanpart->ch_io)
     {
 	case JIO_NULL: s = "null"; break;
@@ -3288,15 +3388,27 @@ channel_info(channel_T *channel, dict_T *dict)
 
     if (channel->ch_hostname != NULL)
     {
-	if (channel->ch_port)
+	if (channel->ch_sock == CH_S_SOCK)
 	{
 	    dict_add_string(dict, "hostname", (char_u *)channel->ch_hostname);
 	    dict_add_number(dict, "port", channel->ch_port);
+	    channel_part_info(channel, dict, "sock", PART_SOCK);
 	}
 	else
-	    // Unix-domain socket.
+	{
+	    // Unix-domain socket or fifo.
 	    dict_add_string(dict, "path", (char_u *)channel->ch_hostname);
-	channel_part_info(channel, dict, "sock", PART_SOCK);
+#ifdef FEAT_FIFO_CHANNEL
+	    if (channel->ch_sock == CH_S_FIFO)
+	    {
+		channel_part_info(channel, dict, "sock", PART_FIFO_OUT);
+	    }
+	    else
+#endif
+	    { // CH_S_UNIX
+		channel_part_info(channel, dict, "sock", PART_SOCK);
+	    }
+	}
     }
     else
     {
@@ -3321,6 +3433,9 @@ channel_close(channel_T *channel, int invoke_close_cb)
 #endif
 
     ch_close_part(channel, PART_SOCK);
+#ifdef FEAT_FIFO_CHANNEL
+    ch_close_part(channel, PART_FIFO_OUT);
+#endif
     ch_close_part(channel, PART_IN);
     ch_close_part(channel, PART_OUT);
     ch_close_part(channel, PART_ERR);
@@ -3461,6 +3576,9 @@ channel_clear(channel_T *channel)
     ch_log(channel, "Clearing channel");
     VIM_CLEAR(channel->ch_hostname);
     channel_clear_one(channel, PART_SOCK);
+#ifdef FEAT_FIFO_CHANNEL
+    channel_clear_one(channel, PART_FIFO_OUT);
+#endif
     channel_clear_one(channel, PART_OUT);
     channel_clear_one(channel, PART_ERR);
     channel_clear_one(channel, PART_IN);
@@ -3733,7 +3851,7 @@ channel_close_now(channel_T *channel)
 
 /*
  * Read from channel "channel" for as long as there is something to read.
- * "part" is PART_SOCK, PART_OUT or PART_ERR.
+ * "part" is PART_SOCK, PART_FIFO_OUT, PART_OUT or PART_ERR.
  * The data is put in the read queue.  No callbacks are invoked here.
  */
     static void

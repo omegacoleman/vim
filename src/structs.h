@@ -2526,6 +2526,10 @@ typedef enum {
 typedef enum {
     PART_SOCK = 0,
 #define CH_SOCK_FD	CH_PART_FD(PART_SOCK)
+#ifdef FEAT_FIFO_CHANNEL
+    PART_FIFO_OUT,
+# define CH_FIFO_OUT_FD	CH_PART_FD(PART_FIFO_OUT)
+#endif
 #ifdef FEAT_JOB_CHANNEL
     PART_OUT,
 # define CH_OUT_FD	CH_PART_FD(PART_OUT)
@@ -2538,6 +2542,12 @@ typedef enum {
 } ch_part_T;
 
 #define INVALID_FD	(-1)
+
+typedef enum {
+    CH_S_SOCK = 0,
+    CH_S_UNIX,
+    CH_S_FIFO,
+} chansock_T;
 
 // The per-fd info for a channel.
 typedef struct {
@@ -2600,6 +2610,8 @@ struct channel_S {
 
     char	*ch_hostname;	// only for socket, allocated
     int		ch_port;	// only for socket
+
+    chansock_T	ch_sock;	// only for socket
 
     int		ch_to_be_closed; // bitset of readable fds to be closed.
 				 // When all readable fds have been closed,
@@ -2710,13 +2722,13 @@ typedef struct
     ch_mode_T	jo_err_mode;
     int		jo_noblock;
 
-    job_io_T	jo_io[4];	// PART_OUT, PART_ERR, PART_IN
-    char_u	jo_io_name_buf[4][NUMBUFLEN];
-    char_u	*jo_io_name[4];	// not allocated!
-    int		jo_io_buf[4];
+    job_io_T	jo_io[5];	// PART_OUT, PART_ERR, PART_IN
+    char_u	jo_io_name_buf[5][NUMBUFLEN];
+    char_u	*jo_io_name[5];	// not allocated!
+    int		jo_io_buf[5];
     int		jo_pty;
-    int		jo_modifiable[4];
-    int		jo_message[4];
+    int		jo_modifiable[5];
+    int		jo_message[5];
     channel_T	*jo_channel;
 
     linenr_T	jo_in_top;
