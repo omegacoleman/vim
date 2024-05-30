@@ -1187,5 +1187,5 @@
 /*
  * +no_open_dir: stop vim command line from opening dirs
  */
-// # define FEAT_NO_OPEN_DIR
+# define FEAT_NO_OPEN_DIR
 
