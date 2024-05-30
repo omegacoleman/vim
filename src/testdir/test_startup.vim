@@ -497,6 +497,10 @@ endfunc
 
 " Test the -geometry argument (for GUI only).
 func Test_geometry()
+  " I use dwm and it does not respect the application setting their own
+  " geometry most of the time
+  throw 'Skipped: rejected by window manager'
+
   CheckCanRunGui
   CheckAnyOf Feature:gui_gtk Feature:gui_motif
 
