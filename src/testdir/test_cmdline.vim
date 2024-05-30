@@ -983,6 +983,10 @@ func Test_cmdline_complete_wildoptions()
 endfunc
 
 func Test_cmdline_complete_user_cmd()
+  if filereadable($VIMRUNTIME .. "/plugin/youcai.vim")
+    throw 'Skipped: Additional colorscheme installed'
+  endif
+
   command! -complete=color -nargs=1 Foo :
   call feedkeys(":Foo \<Tab>\<Home>\"\<cr>", 'tx')
   call assert_equal('"Foo blue', @:)

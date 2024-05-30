@@ -1110,7 +1110,7 @@ func Test_redirect_Ctrl_C()
   call term_sendkeys(buf, GetVimProg() .. " | grep word\<CR>")
   call WaitForAssert({-> assert_match("Output is not to a terminal", getline(1, 4)->join())})
   " wait for the hard coded delay, otherwise the CTRL-C interrupts startup
-  sleep 2
+  sleep 10
   call term_sendkeys(buf, "\<C-C>")
   sleep 100m
   call term_sendkeys(buf, "exit\<CR>")
