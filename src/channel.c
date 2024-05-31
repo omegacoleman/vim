@@ -881,6 +881,7 @@ channel_open_fifo(
     channel->ch_port = 0;
     channel->ch_sock = CH_S_FIFO;
     channel->ch_to_be_closed |= (1U << PART_FIFO_OUT);
+    channel->ch_need_unlink = 1;
 
 #ifdef FEAT_GUI
     channel_gui_register_one(channel, PART_FIFO_OUT);
@@ -1426,6 +1427,7 @@ channel_open_func(typval_T *argvars)
 #ifdef FEAT_FIFO_CHANNEL
     else if (is_fifo)
 	channel = channel_open_fifo((char *)address, NULL);
+
 #endif
     else
 	channel = channel_open((char *)address, port, opt.jo_waittime, NULL);
@@ -1453,7 +1455,6 @@ ch_close_part(channel_T *channel, ch_part_T part)
     else if (part == PART_FIFO_OUT)
     {
 	fd_close(*fd);
-	unlink(channel->ch_hostname);
     }
 #endif
     else
@@ -3438,6 +3439,10 @@ channel_close(channel_T *channel, int invoke_close_cb)
     ch_close_part(channel, PART_SOCK);
 #ifdef FEAT_FIFO_CHANNEL
     ch_close_part(channel, PART_FIFO_OUT);
+    if (channel->ch_need_unlink)
+    {
+      unlink(channel->ch_hostname);
+    }
 #endif
     ch_close_part(channel, PART_IN);
     ch_close_part(channel, PART_OUT);

@@ -2647,6 +2647,8 @@ struct channel_S {
 
     int		ch_refcount;	// reference count
     int		ch_copyID;
+
+    int		ch_need_unlink;	// ch_hostname is a file and needs unlinking upon closing
 };
 
 #define JO_MODE		    0x0001	// channel mode
