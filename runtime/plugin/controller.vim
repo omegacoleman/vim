@@ -19,3 +19,5 @@ export def g:ControllerChannel(): channel
   return rchan
 enddef
 
+autocmd VimLeave * ch_close(rchan)
+

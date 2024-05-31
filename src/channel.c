@@ -1451,7 +1451,10 @@ ch_close_part(channel_T *channel, ch_part_T part)
 	sock_close(*fd);
 #ifdef FEAT_FIFO_CHANNEL
     else if (part == PART_FIFO_OUT)
+    {
 	fd_close(*fd);
+	unlink(channel->ch_hostname);
+    }
 #endif
     else
     {
