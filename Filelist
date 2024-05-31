@@ -1593,5 +1593,6 @@ IGNORE = \
 		ci/unlisted.make \
 		src/libvterm/CODE-MAP \
 		runtime/syntax/testdir/input/html_html \
+		*.sh \
 
 # vim: set ft=make:
